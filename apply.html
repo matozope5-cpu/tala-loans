@@ -465,283 +465,308 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
 
   <script>
-    /* -------------------------
-       Config / Server endpoints (stub)
-       ------------------------- */
-    const API_ENDPOINTS = {
-      initiatePayment: '/api/initiate-payment',
-      verifyPayment: '/api/verify-payment',
-      normalizePhone: '/api/normalize-phone'
-    };
+  /* -------------------------
+     Config / Server endpoints
+     ------------------------- */
+  const API_ENDPOINTS = {
+    initiatePayment: '/api/initiate-payment',
+    verifyPayment: '/api/verify-payment',
+    normalizePhone: '/api/normalize-phone'
+  };
 
-    /* -------------------------
-       Load user data (same behavior)
-       ------------------------- */
-    const userData = JSON.parse(sessionStorage.getItem('myLoan') || '{}');
-    if (!userData.phone_number) {
-      // If no phone, go back to eligibility
-      window.location.href = 'eligibility.html';
-    }
+  /* -------------------------
+     Load user data
+     ------------------------- */
+  const userData = JSON.parse(sessionStorage.getItem('myLoan') || '{}');
+  if (!userData.phone_number) {
+    window.location.href = 'eligibility.html';
+  }
 
-    document.getElementById('user-name').textContent = userData.name || 'Customer';
+  document.getElementById('user-name').textContent = userData.name || 'Customer';
 
-    /* -------------------------
-       TICKER (same)
-       ------------------------- */
-    const tickerMessages = [
-      "0721****77 loaned Ksh 15,000 - just now",
-      "0723****12 loaned Ksh 9,500 - 2 mins ago",
-      "0710****90 loaned Ksh 4,200 - 1 min ago",
-      "0725****89 loaned Ksh 18,000 - just now",
-      "0722****33 loaned Ksh 5,600 - 3 mins ago",
-      "0728****01 loaned Ksh 21,300 - just now",
-      "0711****45 loaned Ksh 8,000 - 5 mins ago",
-      "0713****12 loaned Ksh 13,200 - 9 mins ago",
-      "0727****01 loaned Ksh 22,500 - 7 mins ago",
-      "0706****78 loaned Ksh 16,400 - just now"
-    ];
+  /* -------------------------
+     TICKER (same)
+     ------------------------- */
+  const tickerMessages = [
+    "0721****77 loaned Ksh 15,000 - just now",
+    "0723****12 loaned Ksh 9,500 - 2 mins ago",
+    "0710****90 loaned Ksh 4,200 - 1 min ago",
+    "0725****89 loaned Ksh 18,000 - just now",
+    "0722****33 loaned Ksh 5,600 - 3 mins ago",
+    "0728****01 loaned Ksh 21,300 - just now",
+    "0711****45 loaned Ksh 8,000 - 5 mins ago",
+    "0713****12 loaned Ksh 13,200 - 9 mins ago",
+    "0727****01 loaned Ksh 22,500 - 7 mins ago",
+    "0706****78 loaned Ksh 16,400 - just now"
+  ];
 
-    function initTicker() {
-      const container = document.getElementById('ticker-container');
-      tickerMessages.forEach((m, i) => {
-        const el = document.createElement('div');
-        el.className = 'ticker-item';
-        el.textContent = m;
-        el.dataset.index = i;
-        container.appendChild(el);
-      });
-      const items = container.querySelectorAll('.ticker-item');
-      if (!items.length) return;
-      let idx = 0;
+  function initTicker() {
+    const container = document.getElementById('ticker-container');
+    tickerMessages.forEach((m, i) => {
+      const el = document.createElement('div');
+      el.className = 'ticker-item';
+      el.textContent = m;
+      el.dataset.index = i;
+      container.appendChild(el);
+    });
+    const items = container.querySelectorAll('.ticker-item');
+    if (!items.length) return;
+    let idx = 0;
+    items[idx].classList.add('active');
+    setInterval(() => {
+      items[idx].classList.remove('active');
+      idx = (idx + 1) % items.length;
       items[idx].classList.add('active');
-      setInterval(() => {
-        items[idx].classList.remove('active');
-        idx = (idx + 1) % items.length;
-        items[idx].classList.add('active');
-      }, 2000);
-    }
-    window.addEventListener('load', initTicker);
+    }, 2000);
+  }
+  window.addEventListener('load', initTicker);
 
-    /* -------------------------
-       Loan selection handlers
-       ------------------------- */
-    const loanGrid = document.getElementById('loan-grid');
-    const loanOptions = Array.from(loanGrid.querySelectorAll('.loan-option'));
-    const applyBtn = document.getElementById('apply-btn');
-    const errorMsg = document.getElementById('error-message');
+  /* -------------------------
+     Loan selection handlers
+     ------------------------- */
+  const loanGrid = document.getElementById('loan-grid');
+  const loanOptions = Array.from(loanGrid.querySelectorAll('.loan-option'));
+  const applyBtn = document.getElementById('apply-btn');
+  const errorMsg = document.getElementById('error-message');
 
-    let selectedLoan = null;
-    let paymentReference = null;
+  let selectedLoan = null;
+  let paymentReference = null;
 
-    function formatKsh(n) {
-      return 'Ksh ' + Number(n).toLocaleString('en-KE');
-    }
+  function formatKsh(n) {
+    return 'Ksh ' + Number(n).toLocaleString('en-KE');
+  }
 
-    loanOptions.forEach(opt => {
-      opt.addEventListener('click', () => {
+  loanOptions.forEach(opt => {
+    opt.addEventListener('click', () => {
+      selectLoanOption(opt);
+    });
+    opt.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
         selectLoanOption(opt);
-      });
-      opt.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          selectLoanOption(opt);
-        }
-      });
+      }
+    });
+  });
+
+  function selectLoanOption(element) {
+    loanOptions.forEach(o => o.classList.remove('selected'));
+    element.classList.add('selected');
+    const amount = Number(element.dataset.amount);
+    const fee = Number(element.dataset.fee);
+    selectedLoan = { amount, fee };
+    applyBtn.disabled = false;
+    applyBtn.removeAttribute('aria-disabled');
+    errorMsg.style.display = 'none';
+    userData.loan_amount = amount;
+    userData.processing_fee = fee;
+    sessionStorage.setItem('myLoan', JSON.stringify(userData));
+  }
+
+  /* -------------------------
+     REAL API FUNCTIONS (replacing stubs)
+     ------------------------- */
+  async function normalizePhoneNumber(phone) {
+    const res = await fetch(API_ENDPOINTS.normalizePhone, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Phone normalization failed');
+    return data.normalized_phone;
+  }
+
+  async function sendPayHeroSTK(phoneNumber, amount, loanAmount) {
+    const res = await fetch(API_ENDPOINTS.initiatePayment, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone_number: phoneNumber,
+        amount: amount,           // processing fee
+        loan_amount: loanAmount   // optional, but you may keep it
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Payment initiation failed');
+    return { reference: data.reference };
+  }
+
+  async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000) {
+    for (let i = 0; i < maxAttempts; i++) {
+      const res = await fetch(`${API_ENDPOINTS.verifyPayment}?reference=${reference}`);
+      const data = await res.json();
+      if (data.success && data.status === 'completed') return true;
+      // If the API returns an explicit failure, stop polling
+      if (data.success === false && data.error) {
+        throw new Error(data.error);
+      }
+      await new Promise(r => setTimeout(r, intervalMs));
+    }
+    return false; // timeout
+  }
+
+  /* -------------------------
+     Apply button flow (updated with real APIs)
+     ------------------------- */
+  applyBtn.addEventListener('click', async () => {
+    if (!selectedLoan) {
+      errorMsg.style.display = 'block';
+      return;
+    }
+
+    const confirm = await Swal.fire({
+      title: 'Confirm Loan Application',
+      html: `
+        <div style="text-align:center; padding: 0 8px;">
+          <div style="margin-bottom: 20px;">
+            <i class="fas fa-file-alt" style="font-size: 48px; color: var(--primary); margin-bottom: 12px;"></i>
+          </div>
+          <div style="text-align:left; background: #f8f9fa; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: var(--muted);">Loan Amount:</span>
+              <span style="font-weight: 600; color: var(--primary-strong);">${formatKsh(selectedLoan.amount)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: var(--muted);">Processing Fee:</span>
+              <span style="font-weight: 600;">${formatKsh(selectedLoan.fee)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0;">
+              <span style="color: var(--muted);">Total Repayment:</span>
+              <span style="font-weight: 600;">${formatKsh(Math.round(selectedLoan.amount * 1.10))}</span>
+            </div>
+          </div>
+          <p style="color: var(--muted); font-size: 0.85rem; margin: 0;">
+            An M-Pesa prompt will be sent to complete your application
+          </p>
+          <p style="color: var(--primary-strong); font-size: 0.8rem; margin: 8px 0 0; font-weight: 500;">
+            Phone: ${userData.phone_number}
+          </p>
+        </div>
+      `,
+      icon: false,
+      showCancelButton: true,
+      confirmButtonText: 'Proceed with Application',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: 'var(--primary)',
     });
 
-    function selectLoanOption(element) {
-      loanOptions.forEach(o => o.classList.remove('selected'));
-      element.classList.add('selected');
-      const amount = Number(element.dataset.amount);
-      const fee = Number(element.dataset.fee);
-      selectedLoan = { amount, fee };
-      applyBtn.disabled = false;
-      applyBtn.removeAttribute('aria-disabled');
-      errorMsg.style.display = 'none';
-      userData.loan_amount = amount;
-      userData.processing_fee = fee;
-      sessionStorage.setItem('myLoan', JSON.stringify(userData));
-    }
+    if (!confirm.isConfirmed) return;
 
-    /* -------------------------
-       Payment helpers (stub)
-       ------------------------- */
-    async function normalizePhoneNumber(phone) {
-      // stub – returns phone as-is (replace with actual fetch if needed)
-      return phone;
-    }
+    Swal.fire({
+      title: 'Initiating Payment',
+      html: 'Please wait — sending M-Pesa prompt to your phone...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
 
-    async function sendPayHeroSTK(phoneNumber, amount, loanAmount) {
-      // mock success response
-      return { reference: 'TALA-' + Math.random().toString(36).substring(2,10).toUpperCase() };
-    }
+    try {
+      // 1. Normalize phone number
+      const normalizedPhone = await normalizePhoneNumber(userData.phone_number);
 
-    async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000) {
-      // always succeed after 2 seconds for demo
-      return new Promise((resolve) => {
-        setTimeout(() => resolve(true), 2000);
-      });
-    }
+      // 2. Initiate STK push
+      const paymentResponse = await sendPayHeroSTK(normalizedPhone, selectedLoan.fee, selectedLoan.amount);
 
-    /* -------------------------
-       Apply button flow
-       ------------------------- */
-    applyBtn.addEventListener('click', async () => {
-      if (!selectedLoan) {
-        errorMsg.style.display = 'block';
-        return;
+      if (!paymentResponse || !paymentResponse.reference) {
+        throw new Error('Failed to initiate payment (no reference)');
       }
 
-      const confirm = await Swal.fire({
-        title: 'Confirm Loan Application',
+      paymentReference = paymentResponse.reference;
+
+      Swal.fire({
+        title: 'STK Push Sent',
         html: `
-          <div style="text-align:center; padding: 0 8px;">
-            <div style="margin-bottom: 20px;">
-              <i class="fas fa-file-alt" style="font-size: 48px; color: var(--primary); margin-bottom: 12px;"></i>
+          <div style="text-align:center">
+            <i class="fas fa-mobile-alt" style="font-size:46px;color:var(--primary);margin-bottom:12px"></i>
+            <p style="margin:6px 0 0">Check your phone for the M-Pesa prompt and enter your PIN.</p>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:0.9rem">Phone: ${normalizedPhone}</p>
+            <div style="margin-top:12px;padding:10px;background:#fafafa;border-radius:8px;font-size:0.9rem">
+              <strong>Verifying payment...</strong>
             </div>
-            <div style="text-align:left; background: #f8f9fa; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="color: var(--muted);">Loan Amount:</span>
-                <span style="font-weight: 600; color: var(--primary-strong);">${formatKsh(selectedLoan.amount)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span style="color: var(--muted);">Processing Fee:</span>
-                <span style="font-weight: 600;">${formatKsh(selectedLoan.fee)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 0;">
-                <span style="color: var(--muted);">Total Repayment:</span>
-                <span style="font-weight: 600;">${formatKsh(Math.round(selectedLoan.amount * 1.10))}</span>
-              </div>
-            </div>
-            <p style="color: var(--muted); font-size: 0.85rem; margin: 0;">
-              An M-Pesa prompt will be sent to complete your application
-            </p>
-            <p style="color: var(--primary-strong); font-size: 0.8rem; margin: 8px 0 0; font-weight: 500;">
-              Phone: ${userData.phone_number}
-            </p>
           </div>
         `,
         icon: false,
-        showCancelButton: true,
-        confirmButtonText: 'Proceed with Application',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: 'var(--primary)',
+        showConfirmButton: false,
+        allowOutsideClick: false
       });
 
-      if (!confirm.isConfirmed) return;
+      // 3. Poll for payment confirmation
+      const paymentSuccess = await checkPaymentStatus(paymentReference, 24, 3000);
 
-      Swal.fire({
-        title: 'Initiating Payment',
-        html: 'Please wait — sending M-Pesa prompt to your phone...',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading()
-      });
-
-      try {
-        const normalizedPhone = await normalizePhoneNumber(userData.phone_number);
-        const paymentResponse = await sendPayHeroSTK(normalizedPhone, selectedLoan.fee, selectedLoan.amount);
-
-        if (!paymentResponse || !paymentResponse.reference) {
-          throw new Error('Failed to initiate payment (no reference)');
-        }
-
-        paymentReference = paymentResponse.reference;
-
-        Swal.fire({
-          title: 'STK Push Sent',
+      if (paymentSuccess) {
+        await Swal.fire({
+          title: 'Payment Received',
           html: `
             <div style="text-align:center">
-              <i class="fas fa-mobile-alt" style="font-size:46px;color:var(--primary);margin-bottom:12px"></i>
-              <p style="margin:6px 0 0">Check your phone for the M-Pesa prompt and enter your PIN.</p>
-              <p style="margin:8px 0 0;color:var(--muted);font-size:0.9rem">Phone: ${normalizedPhone}</p>
-              <div style="margin-top:12px;padding:10px;background:#fafafa;border-radius:8px;font-size:0.9rem">
-                <strong>Verifying payment...</strong>
-              </div>
+              <i class="fas fa-check-circle" style="font-size:64px;color:#22c55e;margin-bottom:12px"></i>
+              <p style="margin:6px 0 0">Your payment of <strong>${formatKsh(selectedLoan.fee)}</strong> was received.</p>
+              <p style="color:var(--muted);margin-top:8px;font-size:0.92rem">Approving loan and preparing disbursement...</p>
             </div>
           `,
           icon: false,
           showConfirmButton: false,
-          allowOutsideClick: false
+          timer: 1700
         });
 
-        const paymentSuccess = await checkPaymentStatus(paymentReference, 24, 3000);
+        const approved = {
+          ...userData,
+          ...selectedLoan,
+          paymentReference,
+          approvedAt: new Date().toISOString()
+        };
+        sessionStorage.setItem('loanApproved', JSON.stringify(approved));
 
-        if (paymentSuccess) {
-          await Swal.fire({
-            title: 'Payment Received',
-            html: `
-              <div style="text-align:center">
-                <i class="fas fa-check-circle" style="font-size:64px;color:#22c55e;margin-bottom:12px"></i>
-                <p style="margin:6px 0 0">Your payment of <strong>${formatKsh(selectedLoan.fee)}</strong> was received.</p>
-                <p style="color:var(--muted);margin-top:8px;font-size:0.92rem">Approving loan and preparing disbursement...</p>
-              </div>
-            `,
-            icon: false,
-            showConfirmButton: false,
-            timer: 1700
-          });
-
-          const approved = {
-            ...userData,
-            ...selectedLoan,
-            paymentReference,
-            approvedAt: new Date().toISOString()
-          };
-          sessionStorage.setItem('loanApproved', JSON.stringify(approved));
-
-          window.location.href = 'dash.html';
-        } else {
-          throw new Error('Payment not confirmed');
-        }
-
-      } catch (err) {
-        console.error('Payment flow error', err);
-        Swal.fire({
-          title: 'Payment Failed',
-          html: `
-            <div style="text-align:center">
-              <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#f59e0b;margin-bottom:12px"></i>
-              <p style="margin:0">${err.message || 'Unable to process payment. Please try again.'}</p>
-              <p style="margin-top:8px;color:var(--muted);font-size:0.92rem">Make sure your phone has network & M-Pesa is available.</p>
-            </div>
-          `,
-          icon: false,
-          confirmButtonText: 'Try Again',
-          confirmButtonColor: 'var(--primary)'
-        });
+        window.location.href = 'dash.html';
+      } else {
+        throw new Error('Payment not confirmed after timeout');
       }
-    });
 
-    /* arrow navigation */
-    loanGrid.addEventListener('keydown', (e) => {
-      const focusable = loanOptions;
-      const idx = focusable.indexOf(document.activeElement);
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        const next = focusable[(idx + 1) % focusable.length];
-        next.focus();
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        const prev = focusable[(idx - 1 + focusable.length) % focusable.length];
-        prev.focus();
+    } catch (err) {
+      console.error('Payment flow error', err);
+      Swal.fire({
+        title: 'Payment Failed',
+        html: `
+          <div style="text-align:center">
+            <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#f59e0b;margin-bottom:12px"></i>
+            <p style="margin:0">${err.message || 'Unable to process payment. Please try again.'}</p>
+            <p style="margin-top:8px;color:var(--muted);font-size:0.92rem">Make sure your phone has network & M-Pesa is available.</p>
+          </div>
+        `,
+        icon: false,
+        confirmButtonText: 'Try Again',
+        confirmButtonColor: 'var(--primary)'
+      });
+    }
+  });
+
+  /* arrow navigation */
+  loanGrid.addEventListener('keydown', (e) => {
+    const focusable = loanOptions;
+    const idx = focusable.indexOf(document.activeElement);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = focusable[(idx + 1) % focusable.length];
+      next.focus();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = focusable[(idx - 1 + focusable.length) % focusable.length];
+      prev.focus();
+    }
+  });
+
+  /* restore selection if returning */
+  (function restoreSelection(){
+    if (userData.loan_amount) {
+      const el = loanOptions.find(o => Number(o.dataset.amount) === Number(userData.loan_amount));
+      if (el) {
+        setTimeout(() => {
+          el.classList.add('selected');
+          selectedLoan = { amount: Number(el.dataset.amount), fee: Number(el.dataset.fee) };
+          applyBtn.disabled = false;
+          applyBtn.removeAttribute('aria-disabled');
+        }, 160);
       }
-    });
-
-    /* restore selection if returning */
-    (function restoreSelection(){
-      if (userData.loan_amount) {
-        const el = loanOptions.find(o => Number(o.dataset.amount) === Number(userData.loan_amount));
-        if (el) {
-          setTimeout(() => {
-            el.classList.add('selected');
-            selectedLoan = { amount: Number(el.dataset.amount), fee: Number(el.dataset.fee) };
-            applyBtn.disabled = false;
-            applyBtn.removeAttribute('aria-disabled');
-          }, 160);
-        }
-      }
-    })();
-
-  </script>
+    }
+  })();
+</script>
 </body>
 </html>
