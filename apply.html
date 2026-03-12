@@ -563,7 +563,7 @@
   }
 
   /* -------------------------
-     REAL API FUNCTIONS (replacing stubs)
+     REAL API FUNCTIONS
      ------------------------- */
   async function normalizePhoneNumber(phone) {
     const res = await fetch(API_ENDPOINTS.normalizePhone, {
@@ -582,8 +582,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         phone_number: phoneNumber,
-        amount: amount,           // processing fee
-        loan_amount: loanAmount   // optional, but you may keep it
+        amount: amount,
+        loan_amount: loanAmount
       })
     });
     const data = await res.json();
@@ -591,22 +591,55 @@
     return { reference: data.reference };
   }
 
-  async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000) {
+  /**
+   * Poll for payment status until completed or timeout.
+   * Returns true if payment is confirmed, false if timeout.
+   */
+  async function checkPaymentStatus(reference, maxAttempts = 30, intervalMs = 4000) {
     for (let i = 0; i < maxAttempts; i++) {
-      const res = await fetch(`${API_ENDPOINTS.verifyPayment}?reference=${reference}`);
-      const data = await res.json();
-      if (data.success && data.status === 'completed') return true;
-      // If the API returns an explicit failure, stop polling
-      if (data.success === false && data.error) {
-        throw new Error(data.error);
+      try {
+        const res = await fetch(`${API_ENDPOINTS.verifyPayment}?reference=${reference}`);
+        const data = await res.json();
+
+        // Log the response for debugging (remove in production)
+        console.log('Verification attempt', i+1, data);
+
+        // Check if the API call itself succeeded
+        if (!data.success) {
+          // If backend explicitly says failure, throw error
+          throw new Error(data.error || 'Verification failed');
+        }
+
+        // Normalize status string to lowercase for comparison
+        const status = (data.status || '').toLowerCase();
+
+        // Treat any of these as "payment successful"
+        if (['completed', 'success', 'paid', 'successful'].includes(status)) {
+          return true;
+        }
+
+        // If status is 'failed' or similar, abort early
+        if (['failed', 'cancelled', 'error'].includes(status)) {
+          throw new Error(`Payment ${status}`);
+        }
+
+        // Otherwise, wait and continue polling
+        await new Promise(r => setTimeout(r, intervalMs));
+      } catch (err) {
+        console.error('Polling error:', err);
+        // If it's an abort condition, rethrow
+        if (err.message.includes('failed') || err.message.includes('cancelled')) {
+          throw err;
+        }
+        // For network errors, just continue polling (maybe it's temporary)
+        await new Promise(r => setTimeout(r, intervalMs));
       }
-      await new Promise(r => setTimeout(r, intervalMs));
     }
     return false; // timeout
   }
 
   /* -------------------------
-     Apply button flow (updated with real APIs)
+     Apply button flow
      ------------------------- */
   applyBtn.addEventListener('click', async () => {
     if (!selectedLoan) {
@@ -660,10 +693,7 @@
     });
 
     try {
-      // 1. Normalize phone number
       const normalizedPhone = await normalizePhoneNumber(userData.phone_number);
-
-      // 2. Initiate STK push
       const paymentResponse = await sendPayHeroSTK(normalizedPhone, selectedLoan.fee, selectedLoan.amount);
 
       if (!paymentResponse || !paymentResponse.reference) {
@@ -689,8 +719,8 @@
         allowOutsideClick: false
       });
 
-      // 3. Poll for payment confirmation
-      const paymentSuccess = await checkPaymentStatus(paymentReference, 24, 3000);
+      // Start polling (max 30 attempts * 4s = 2 minutes)
+      const paymentSuccess = await checkPaymentStatus(paymentReference, 30, 4000);
 
       if (paymentSuccess) {
         await Swal.fire({
